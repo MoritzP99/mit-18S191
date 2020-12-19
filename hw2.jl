@@ -435,15 +435,10 @@ function least_energy(energies, i, j)
 	
 	potential_cols = clamp.(j .+ [-1, 0,1], 1, size(energies, 2))
 	
-	idx, (min_energy, next_col) = 
+	idx, (min_energy, _) = 
 		reduce((x,y) -> y[2][1] < x[2][1] ? y : x, 											enumerate([least_energy(energies, i+1, potential_cols[1]),
 					least_energy(energies, i+1, potential_cols[2]),
 					least_energy(energies, i+1, potential_cols[3])]))
-	
-	if next_col == 0
-		# reached basecase
-		next_col = potential_cols[idx]
-	end
 	
 	return (energies[i, j] + min_energy, potential_cols[idx])
 end
@@ -487,9 +482,7 @@ function recursive_seam(energies, starting_pixel)
 	seam[1] = starting_pixel
 	
 	for i=1:m-1
-		print((energies, i, seam[i])[2])
 		next_pixel = least_energy(energies, i, seam[i])[2] 
-		
 		seam[i+1] = next_pixel
 	end
 	return seam
@@ -545,18 +538,49 @@ You are expected to read and understand the [documentation on dictionaries](http
 function memoized_least_energy(energies, i, j, memory)
 	m, n = size(energies)
 	
-	# Replace the following line with your code.
-	[starting_pixel for i=1:m]
+	# base case
+	if i==m
+		return get!(memory, (i,j), energies[i,j])
+	end
+	
+	# fix boundary conditions
+	path = clamp.(j .+ [-1,0,1], 1, n)
+	
+	# check in memory otherwise recusrsion & store
+	if haskey(memory, (i,j))
+		return memory[(i,j)]
+	else
+		min_energy = 
+			minimum([memoized_least_energy(energies, i+1, path[1], memory),
+					 memoized_least_energy(energies, i+1, path[2], memory),
+					 memoized_least_energy(energies, i+1, path[3], memory)])
+		
+		memory[(i,j)] = energies[i,j] + min_energy
+	end
+	
+	return memory[(i,j)]
 end
 
 # ╔═╡ 3e8b0868-f3bd-11ea-0c15-011bbd6ac051
 function recursive_memoized_seam(energies, starting_pixel)
 	memory = Dict{Tuple{Int,Int}, Float64}() # location => least energy.
-	                                         # pass this every time you call memoized_least_energy.
+	                                         # pass this every time you call 
 	m, n = size(energies)
 	
-	# Replace the following line with your code.
-	[rand(1:starting_pixel) for i=1:m]
+	seam = zeros(Int, m)
+	seam[1] = starting_pixel
+	
+	memoized_least_energy(energies, 1, seam[1], memory)
+	
+	for i=1:m-1
+		path = clamp.(seam[i] .+ [-1, 0, 1], 1, n)
+		
+		idx = findmin([memory[i+1,path[1]], 
+						memory[i+1,path[2]],   			     												memory[i+1,path[3]]])[2]
+		
+		seam[i+1] = path[idx]
+	end
+	return seam
 end
 
 # ╔═╡ 4e3bcf88-f3c5-11ea-3ada-2ff9213647b7
@@ -683,17 +707,6 @@ if shrink_greedy
 	greedy_carved[greedy_n]
 end
 
-# ╔═╡ 4e3ef866-f3c5-11ea-3fb0-27d1ca9a9a3f
-if shrink_dict
-	dict_carved = shrink_n(img, 200, recursive_memoized_seam)
-	md"Shrink by: $(@bind dict_n Slider(1:200, show_value=true))"
-end
-
-# ╔═╡ 6e73b1da-f3c5-11ea-145f-6383effe8a89
-if shrink_dict
-	dict_carved[dict_n]
-end
-
 # ╔═╡ 50829af6-f3c5-11ea-04a8-0535edd3b0aa
 if shrink_matrix
 	matrix_carved = shrink_n(img, 200, matrix_memoized_seam)
@@ -750,6 +763,19 @@ end
 # ╔═╡ e66ef06a-f392-11ea-30ab-7160e7723a17
 if shrink_recursive
 	recursive_carved[recursive_n]
+end
+
+# ╔═╡ 4e3ef866-f3c5-11ea-3fb0-27d1ca9a9a3f
+if shrink_dict
+    dec = 5
+    img_small = decimate(img, dec)
+    dict_carved = shrink_n(img_small, size(img_small, 2), recursive_memoized_seam)
+    md"Shrink by: $(@bind dict_n Slider(1:size(img_small, 2), show_value=true))"
+end
+
+# ╔═╡ 6e73b1da-f3c5-11ea-145f-6383effe8a89
+if shrink_dict
+	dict_carved[dict_n]
 end
 
 # ╔═╡ ffc17f40-f380-11ea-30ee-0fe8563c0eb1
@@ -963,7 +989,7 @@ bigbreak
 # ╠═e66ef06a-f392-11ea-30ab-7160e7723a17
 # ╟─c572f6ce-f372-11ea-3c9a-e3a21384edca
 # ╠═6d993a5c-f373-11ea-0dde-c94e3bbd1552
-# ╠═ea417c2a-f373-11ea-3bb0-b1b5754f2fac
+# ╟─ea417c2a-f373-11ea-3bb0-b1b5754f2fac
 # ╟─56a7f954-f374-11ea-0391-f79b75195f4d
 # ╠═b1d09bc8-f320-11ea-26bb-0101c9a204e2
 # ╠═3e8b0868-f3bd-11ea-0c15-011bbd6ac051
